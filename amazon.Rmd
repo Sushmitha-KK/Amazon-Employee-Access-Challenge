@@ -1,0 +1,114 @@
+---
+title: "Amazon analysis"
+author: "Sushmitha K"
+date: "June 10, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(dplyr)
+library(rpart)
+library(rattle)
+library(randomForest)
+library(caret)
+
+
+```
+
+
+```{r}
+
+amazon_train = read.csv("E:/Extra/Amazon/train.csv")
+amazon_test = read.csv("E:/Extra/Amazon/test.csv")
+
+names(amazon_train)
+
+```
+
+
+```{r}
+
+amazon_train_train = amazon_train[sample(1:nrow(amazon_train),0.8*nrow(amazon_train)),]
+amazon_train_test = amazon_train[sample(1:nrow(amazon_train),0.2*nrow(amazon_train)),]
+
+```
+
+
+### rpart
+
+```{r}
+
+amazon_model = rpart(as.factor(ACTION)~.,data = amazon_train_train, control = rpart.control(cp = 0))
+
+printcp(amazon_model)
+
+cpval = amazon_model$cptable[which.min(amazon_model$cptable[,"xerror"]),"CP"]
+
+amazon_new_model <- prune(amazon_model, cpval)
+
+fancyRpartPlot(amazon_model)
+
+
+ACTION_predicted = predict(amazon_new_model,newdata = amazon_train_test %>% select(-ACTION),type = "class")
+
+
+mean(ACTION_predicted == amazon_train_test$ACTION)
+```
+
+
+```{r}
+
+
+model_final = rpart(as.factor(ACTION)~.,data = amazon_train,control = rpart.control(cp = 0))
+
+printcp(model_final)
+
+cpval = model_final$cptable[which.min(model_final$cptable[,"xerror"]),"CP"]
+
+model_final = prune(model_final,cpval)
+
+fancyRpartPlot(model_final)
+
+
+ACTION_predicted = predict(model_final,newdata = amazon_test,type = "class")
+class(ACTION_predicted)
+
+df = data.frame(Id = amazon_test$id,Action = ACTION_predicted)
+dim(df)
+write.csv(df,"E:/Extra/Amazon/amazon_submission.csv",row.names = F)
+```
+
+##################
+
+### random forest
+
+```{r}
+
+amazon_train_train$ACTION = as.factor(amazon_train_train$ACTION)
+mtry = round(sqrt(length(colnames(amazon_train_train))-1))
+random_model = randomForest(ACTION~.,data = amazon_train_train,ntree = 10,mtry = mtry)
+
+amazon_train_test$ACTION_predicted = predict(random_model,newdata = amazon_train_test,type = "class")
+
+cm = table(amazon_train_test$ACTION,amazon_train_test$ACTION_predicted)
+
+cm1 = confusionMatrix(amazon_train_test$ACTION,amazon_train_test$ACTION_predicted,positive = '1')
+
+cm1$overall['Accuracy']
+cm1$byClass['Sensitivity']
+```
+
+```{r}
+amazon_train$ACTION = as.factor(amazon_train$ACTION)
+mtry = round(sqrt(length(colnames(amazon_train))-1))
+random_model = randomForest(ACTION~.,data = amazon_train,ntree = 100,mtry = mtry)
+
+amazon_test$ACTION_predicted = predict(random_model,newdata = amazon_test,type = "class")
+
+df = data.frame(Id = amazon_test$id,Action = amazon_test$ACTION_predicted)
+dim(df)
+write.csv(df,"E:/Extra/Amazon/amazon_submission2.csv",row.names = F)
+```
+
